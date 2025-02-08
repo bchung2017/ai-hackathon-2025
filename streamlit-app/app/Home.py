@@ -43,6 +43,8 @@ if "current_question" not in st.session_state:
     st.session_state.current_question = None
 if "current_topic" not in st.session_state:
     st.session_state.current_topic = ""
+if "user_answer" not in st.session_state:
+    st.session_state.user_answer = ""
 
 st.title("Computer Science Concept Quiz")
 
@@ -73,28 +75,37 @@ for message in st.session_state.chat_log:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-user_answer = st.text_area("Your Answer:")
+user_answer = st.text_area("Your Answer:", value=st.session_state.user_answer)
 
 if st.button("Submit"):
-    st.session_state.chat_log.append({"role": "user", "content": user_answer})
-    
-    prompt_eval = f"Evaluate this answer to the question: '{st.session_state.current_question}'. Answer: {user_answer}. Instead of correcting the user, ask follow-up questions that highlight gaps in their understanding and encourage deeper thinking. Do not provide the correct answer."
-    with st.spinner("Thinking..."):
-        time.sleep(1)  # Simulate loading
-        eval_response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": "You are a confused student who isn't sure if they understand the topic. Instead of providing corrections, ask the user additional questions to encourage deeper thinking and help them identify gaps in their understanding."},
-                      {"role": "user", "content": prompt_eval}]
-        )
+    if user_answer.strip():  # Only proceed if the user provided an answer
+        st.session_state.user_answer = user_answer
+        st.session_state.chat_log.append({"role": "user", "content": user_answer})
         
-    feedback = eval_response.choices[0].message.content.strip()
-    st.session_state.chat_log.append({"role": "assistant", "content": feedback})
+        prompt_eval = f"Evaluate this answer to the question: '{st.session_state.current_question}'. Answer: {user_answer}. Instead of correcting the user, ask follow-up questions that highlight gaps in their understanding and encourage deeper thinking. Do not provide the correct answer."
+        with st.spinner("Thinking..."):
+            time.sleep(1)  # Simulate loading
+            try:                
+                eval_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "system", "content": "You are a confused student who isn't sure if they understand the topic. Instead of providing corrections, ask the user additional questions to encourage deeper thinking and help them identify gaps in their understanding."},
+                            {"role": "user", "content": prompt_eval}]
+                )        
+                feedback = eval_response.choices[0].message.content.strip()
+                st.session_state.chat_log.append({"role": "assistant", "content": feedback})
+                st.session_state.user_answer = ""  # Clear input after submission
+
+            except Exception as e:
+                st.error(f"Error retrieving response: {e}")
+                st.session_state.chat_log.append({"role": "assistant", "content": "Hmm, I got confused. Can you try again?"})
 
 if st.button("Next Question"):
     st.session_state.current_question, st.session_state.current_topic = generate_question()
     st.session_state.chat_log.append({"role": "assistant", "content": st.session_state.current_question})
+    st.session_state.user_answer = ""
     
 st.write(f"Your Score: {st.session_state.score}")
+
 
 # # Flatten curriculum into a list of topics
 # courses = []
